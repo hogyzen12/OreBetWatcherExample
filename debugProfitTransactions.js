@@ -64,7 +64,7 @@ async function debugTransactions() {
 
   let count = 0;
   for await (const line of rl) {
-    if (line.trim() && count < 50) {
+    if (line.trim()) {
       const tx = JSON.parse(line);
       const signature = extractSignature(tx);
       if (signature) {
@@ -73,116 +73,114 @@ async function debugTransactions() {
         count++;
       }
     }
-    if (count >= 50) break;
   }
 
   console.log(`Loaded ${signatures.length} transactions\n`);
-  console.log('🔄 Parsing with Enhanced API...\n');
+  console.log('🔄 Parsing with Enhanced API in batches...\n');
 
-  const parsed = await parseTransactionBatch(signatures);
-
-  if (!parsed || !Array.isArray(parsed)) {
-    console.error('Failed to parse transactions');
-    return;
-  }
-
-  console.log(`Parsed ${parsed.length} transactions\n`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
+  const BATCH_SIZE = 100;
+  const allUSDCTransfers = [];
   let foundUSDC = 0;
   let foundFromBot = 0;
+  let processed = 0;
 
-  for (let i = 0; i < parsed.length; i++) {
-    const tx = parsed[i];
+  for (let batchStart = 0; batchStart < signatures.length; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, signatures.length);
+    const batchSigs = signatures.slice(batchStart, batchEnd);
+    const batchNum = Math.floor(batchStart / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(signatures.length / BATCH_SIZE);
 
-    if (!tx || tx.error) {
-      console.log(`Transaction ${i + 1}: Parse error`);
+    console.log(`   Batch ${batchNum}/${totalBatches}: Processing ${batchSigs.length} transactions...`);
+
+    const parsed = await parseTransactionBatch(batchSigs);
+
+    if (!parsed || !Array.isArray(parsed)) {
+      console.error('Failed to parse batch');
       continue;
     }
 
-    console.log(`\n📝 Transaction ${i + 1}:`);
-    console.log(`   Signature: ${tx.signature?.substring(0, 20)}...`);
-    console.log(`   Type: ${tx.type || 'UNKNOWN'}`);
-    console.log(`   Description: ${tx.description || 'N/A'}`);
-    console.log(`   Source: ${tx.source || 'N/A'}`);
+    for (let i = 0; i < parsed.length; i++) {
+      const tx = parsed[i];
+      processed++;
 
-    // Check for native transfers (SOL)
-    if (tx.nativeTransfers && tx.nativeTransfers.length > 0) {
-      console.log(`   Native Transfers (SOL): ${tx.nativeTransfers.length}`);
-      for (const transfer of tx.nativeTransfers) {
-        console.log(`      From: ${transfer.fromUserAccount?.substring(0, 20)}...`);
-        console.log(`      To: ${transfer.toUserAccount?.substring(0, 20)}...`);
-        console.log(`      Amount: ${transfer.amount / 1e9} SOL`);
+      if (!tx || tx.error) {
+        continue;
       }
-    }
 
-    // Check for token transfers
-    if (tx.tokenTransfers && tx.tokenTransfers.length > 0) {
-      console.log(`   Token Transfers: ${tx.tokenTransfers.length}`);
-      for (const transfer of tx.tokenTransfers) {
-        const isUSDC = transfer.mint === USDC_MINT;
-        const fromBot = transfer.fromUserAccount === TRADING_BOT_WALLET;
-        const toProfit = transfer.toUserAccount === PROFIT_WALLET;
+      // Check for token transfers
+      if (tx.tokenTransfers && tx.tokenTransfers.length > 0) {
+        for (const transfer of tx.tokenTransfers) {
+          const isUSDC = transfer.mint === USDC_MINT;
 
-        console.log(`      Token: ${transfer.mint?.substring(0, 20)}... ${isUSDC ? '✅ USDC' : ''}`);
-        console.log(`      From: ${transfer.fromUserAccount?.substring(0, 20)}... ${fromBot ? '✅ BOT' : ''}`);
-        console.log(`      To: ${transfer.toUserAccount?.substring(0, 20)}... ${toProfit ? '✅ PROFIT' : ''}`);
-        console.log(`      Amount: ${transfer.tokenAmount}`);
+          if (isUSDC) {
+            foundUSDC++;
+            const fromBot = transfer.fromUserAccount === TRADING_BOT_WALLET;
+            const toProfit = transfer.toUserAccount === PROFIT_WALLET;
 
-        if (transfer.fromTokenAccount) {
-          console.log(`      From Token Acct: ${transfer.fromTokenAccount?.substring(0, 20)}...`);
-        }
-        if (transfer.toTokenAccount) {
-          console.log(`      To Token Acct: ${transfer.toTokenAccount?.substring(0, 20)}...`);
-        }
+            const usdcInfo = {
+              signature: tx.signature,
+              timestamp: tx.timestamp,
+              date: new Date((tx.timestamp || 0) * 1000).toISOString(),
+              description: tx.description,
+              type: tx.type,
+              source: tx.source,
+              fromUserAccount: transfer.fromUserAccount,
+              toUserAccount: transfer.toUserAccount,
+              fromTokenAccount: transfer.fromTokenAccount,
+              toTokenAccount: transfer.toTokenAccount,
+              tokenAmount: transfer.tokenAmount,
+              mint: transfer.mint,
+              isFromBot: fromBot,
+              isToProfit: toProfit,
+              isProfitTransfer: fromBot && toProfit
+            };
 
-        if (isUSDC) {
-          foundUSDC++;
-          console.log(`      ⭐ USDC TRANSFER FOUND!`);
+            allUSDCTransfers.push(usdcInfo);
 
-          if (fromBot && toProfit) {
-            foundFromBot++;
-            console.log(`      🎯 THIS IS A PROFIT TRANSFER!`);
-          } else {
-            console.log(`      ⚠️  But not from bot to profit wallet`);
-            if (!fromBot) console.log(`         From user is: ${transfer.fromUserAccount}`);
-            if (!toProfit) console.log(`         To user is: ${transfer.toUserAccount}`);
+            if (fromBot && toProfit) {
+              foundFromBot++;
+              console.log(`   🎯 PROFIT TRANSFER! ${transfer.tokenAmount / 1e6} USDC - ${tx.signature.substring(0, 20)}...`);
+            }
           }
         }
       }
-    } else {
-      console.log(`   Token Transfers: None`);
     }
 
-    // Check account data
-    if (tx.accountData && tx.accountData.length > 0) {
-      console.log(`   Account Data: ${tx.accountData.length} accounts`);
-      for (const acct of tx.accountData.slice(0, 3)) {
-        console.log(`      ${acct.account?.substring(0, 30)}...`);
-        if (acct.nativeBalanceChange) {
-          console.log(`        Balance change: ${acct.nativeBalanceChange / 1e9} SOL`);
-        }
-      }
+    // Rate limit delay
+    if (batchStart + BATCH_SIZE < signatures.length) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
-
-    console.log('   ─────────────────────────────────────────────────');
   }
 
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   console.log('📊 Summary:\n');
-  console.log(`   Transactions examined: ${parsed.length}`);
+  console.log(`   Transactions processed: ${processed}`);
   console.log(`   USDC transfers found: ${foundUSDC}`);
   console.log(`   From bot to profit: ${foundFromBot}`);
   console.log('');
 
-  if (foundUSDC === 0) {
-    console.log('🔍 Let\'s check the raw transaction data...\n');
+  if (allUSDCTransfers.length > 0) {
+    // Save to file
+    fs.writeFileSync('debug_usdc_transfers.json', JSON.stringify(allUSDCTransfers, null, 2));
+    console.log(`💾 Saved ${allUSDCTransfers.length} USDC transfers to debug_usdc_transfers.json\n`);
 
-    // Check first raw transaction
-    const firstRaw = rawTransactions[0];
-    console.log('First raw transaction structure:');
-    console.log(JSON.stringify(firstRaw, null, 2).substring(0, 2000));
-    console.log('\n...(truncated)\n');
+    // Show detailed info
+    console.log('📋 All USDC Transfers:\n');
+    for (const transfer of allUSDCTransfers) {
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      console.log(`Signature: ${transfer.signature}`);
+      console.log(`Date: ${transfer.date}`);
+      console.log(`Amount: ${transfer.tokenAmount / 1e6} USDC`);
+      console.log(`From Wallet: ${transfer.fromUserAccount}`);
+      console.log(`To Wallet: ${transfer.toUserAccount}`);
+      console.log(`From Token Acct: ${transfer.fromTokenAccount}`);
+      console.log(`To Token Acct: ${transfer.toTokenAccount}`);
+      console.log(`Is From Bot: ${transfer.isFromBot ? '✅ YES' : '❌ NO'}`);
+      console.log(`Is To Profit: ${transfer.isToProfit ? '✅ YES' : '❌ NO'}`);
+      console.log(`Is Profit Transfer: ${transfer.isProfitTransfer ? '🎯 YES' : '⚠️  NO'}`);
+      console.log(`Description: ${transfer.description}`);
+      console.log('');
+    }
   }
 }
 
