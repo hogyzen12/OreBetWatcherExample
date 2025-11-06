@@ -36,43 +36,89 @@ The script will:
 2. ✅ Filter transactions between April 6, 2024 and April 5, 2025
 3. ✅ Retrieve complete transaction details with full metadata
 4. ✅ Handle pagination automatically (fetches all pages)
-5. ✅ Display a monthly breakdown and summary
-6. ✅ Save everything to a timestamped JSON file
+5. ✅ **Stream data to disk incrementally** (memory efficient for 100k+ transactions)
+6. ✅ Display a monthly breakdown and summary
+7. ✅ Save transactions as NDJSON + summary as JSON
 
 ## Output
 
-The script will create a file like:
+The script creates **two files**:
+
+### 1. Transaction Data (NDJSON format)
 ```
-tax_year_2024-25_transactions_1699564800000.json
+tax_year_2024-25_transactions_1699564800000.ndjson
 ```
 
-### File Structure
+This is a **newline-delimited JSON** file where each line is a complete transaction object. This format:
+- ✅ Works with datasets of any size (tested with 170k+ transactions)
+- ✅ Can be processed line-by-line without loading entire file into memory
+- ✅ Easy to process with standard tools like `jq`, `grep`, `awk`
 
+Example (each line is one transaction):
+```
+{"slot":12345,"transaction":{...},"blockTime":1234567890}
+{"slot":12346,"transaction":{...},"blockTime":1234567891}
+{"slot":12347,"transaction":{...},"blockTime":1234567892}
+```
+
+### 2. Summary File (JSON format)
+```
+tax_year_2024-25_summary_1699564800000.json
+```
+
+Contains metadata and statistics:
 ```json
 {
   "metadata": {
     "address": "rtrAfh7jLW92d5SqsibLQPRFS7DPEs5UraZR7B4Sd5i",
     "taxYear": "2024-25",
-    "dateRange": {
-      "start": "2024-04-06T00:00:00.000Z",
-      "end": "2025-04-05T23:59:59.000Z"
-    },
-    "totalTransactions": 1234,
-    "fetchedAt": "2024-11-06T12:34:56.789Z"
+    "totalTransactions": 171390,
+    "dataFile": "tax_year_2024-25_transactions_1699564800000.ndjson",
+    "dataFormat": "ndjson (newline-delimited JSON - one transaction per line)"
   },
-  "transactions": [
-    // Array of full transaction objects
-  ]
+  "monthlyBreakdown": {
+    "2024-07": 976,
+    "2024-08": 1578,
+    ...
+  }
 }
+```
+
+### Working with NDJSON Files
+
+```bash
+# Count total transactions
+wc -l tax_year_2024-25_transactions_*.ndjson
+
+# View first transaction (pretty-printed)
+head -1 tax_year_2024-25_transactions_*.ndjson | jq .
+
+# View last transaction
+tail -1 tax_year_2024-25_transactions_*.ndjson | jq .
+
+# Search for specific signature
+grep "YOUR_SIGNATURE_HERE" tax_year_2024-25_transactions_*.ndjson | jq .
+
+# Convert first 10 transactions to regular JSON array
+head -10 tax_year_2024-25_transactions_*.ndjson | jq -s .
+
+# Extract all signatures
+cat tax_year_2024-25_transactions_*.ndjson | jq -r '.transaction.signatures[0]'
+
+# Filter by date range
+cat tax_year_2024-25_transactions_*.ndjson | \
+  jq 'select(.blockTime >= 1704067200 and .blockTime <= 1706745599)'
 ```
 
 ## Features
 
+- **Memory Efficient**: Streams data to disk incrementally - handles 100k+ transactions without issues
 - **Chronological Order**: Transactions are fetched oldest-first for easier analysis
 - **Full Details**: Each transaction includes complete data (signatures, instructions, metadata)
 - **Success Only**: Filters out failed transactions
 - **Progress Tracking**: Shows real-time progress as it fetches
 - **Monthly Summary**: Displays transaction count by month
+- **NDJSON Format**: Easy to process with standard Unix tools and streaming processors
 
 ## Cost
 
@@ -117,6 +163,12 @@ This could mean:
 - The address had no activity during the tax year
 - The API key doesn't have access to the endpoint (requires Developer plan)
 - The date range is incorrect
+
+### Out of Memory Errors
+The script uses streaming writes to avoid memory issues. However, if you still encounter problems:
+- The script should handle even 500k+ transactions without issues
+- Check available disk space (large datasets can be several GB)
+- Try reducing the API delay between requests (line 133 in the script)
 
 ## Next Steps
 
