@@ -3,6 +3,7 @@
 /**
  * Debug script to inspect profit wallet transactions
  * This will help us understand the actual structure of the transactions
+ * and find ALL USDC transfers
  */
 
 const fs = require('fs');
@@ -51,7 +52,7 @@ async function debugTransactions() {
     process.exit(1);
   }
 
-  console.log('📥 Reading first 50 transactions...\n');
+  console.log('📥 Reading ALL transactions...\n');
 
   const signatures = [];
   const rawTransactions = [];
@@ -181,6 +182,12 @@ async function debugTransactions() {
       console.log(`Description: ${transfer.description}`);
       console.log('');
     }
+  } else {
+    console.log('⚠️  No USDC transfers found in any transactions\n');
+    console.log('This could mean:');
+    console.log('   - Profits are in a different token');
+    console.log('   - USDC transfers are in the trading wallet, not profit wallet');
+    console.log('   - Need to check the trading wallet transactions instead\n');
   }
 }
 
