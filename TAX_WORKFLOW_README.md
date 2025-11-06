@@ -12,6 +12,24 @@ Tax Year: **April 6, 2024 to April 5, 2025** (UK Tax Year)
 
 ## Quick Start
 
+### 🎯 RECOMMENDED: Track Verified Profits Only
+
+The fastest and most accurate way to get your trading profits:
+
+```bash
+# 1. Fetch profit wallet transactions
+node fetchProfitWalletTransactions.js
+
+# 2. Extract verified USDC profit transfers
+node trackTradingProfits.js
+```
+
+This gives you a clean report of **verified USDC transfers from trading bot to profit wallet** - the exact profits you need for taxes!
+
+### 📊 Complete Transaction Analysis
+
+For full transaction analysis across all wallets:
+
 ```bash
 # Set your Helius API key
 export HELIUS_API_KEY=your_api_key_here
@@ -60,7 +78,50 @@ node fetchProfitWalletTransactions.js
 - `tax_year_2024-25_profit_wallet_transactions.ndjson`
 - `tax_year_2024-25_profit_wallet_summary.json`
 
-### Step 3: Generate Complete Tax Report
+### Step 3: Track Verified Trading Profits (RECOMMENDED) ⭐
+
+```bash
+node trackTradingProfits.js
+```
+
+**What it does:**
+- Identifies USDC transfers from trading bot wallet to profit wallet
+- These are **verified, attestable trading profits**
+- Most accurate way to track income for tax purposes
+- Parses transactions to extract exact USDC amounts
+
+**Output:**
+- `tax_year_2024-25_VERIFIED_TRADING_PROFITS.csv` - Clean CSV with profit transfers
+- `tax_year_2024-25_profits_summary.json` - Summary statistics
+
+**Example Output:**
+```
+💰 TRADING PROFIT SUMMARY
+
+📊 Total Verified Profits:
+   💵 12,345.67 USDC
+   📈 156 profit transfers
+   📊 79.14 USDC average per transfer
+
+📅 Monthly Breakdown:
+   2024-07: 1,234.56 USDC (12 transfers)
+   2024-08: 2,345.67 USDC (18 transfers)
+   ...
+```
+
+**Why This is Best for Taxes:**
+✅ **Attestable** - Each transfer is from the verified trading bot wallet
+✅ **Unambiguous** - These are deliberate profit withdrawals, not random transfers
+✅ **Clean** - Simple CSV with date, amount, signature, and blockchain proof
+✅ **Accurate** - No need to categorize complex trades or swaps
+
+**CSV Format:**
+```
+Date,USDC Amount,Fee (SOL),Signature,Description,Explorer Link
+2024-07-20T10:15:30.000Z,156.789000,0.000005000,5rf...JtP,Trading profit transfer,https://solscan.io/tx/...
+```
+
+### Step 4: Generate Complete Tax Report (Alternative)
 
 ```bash
 node generateCompleteTaxReport.js
@@ -148,17 +209,66 @@ node fetchTaxYearTransactions.js --resume
 -r  # Resume
 ```
 
+## Which Approach Should You Use?
+
+### 🎯 For Simple Income Reporting (RECOMMENDED)
+
+**Use: `trackTradingProfits.js`**
+
+Best if you:
+- Only need to report trading income (not capital gains)
+- Want a simple, clean report
+- Trust that USDC transfers to profit wallet = your profits
+- Want blockchain-verified proof of income
+
+**Pros:**
+✅ Fast (processes only profit wallet transactions)
+✅ Clean output (one line per profit transfer)
+✅ Attestable (blockchain proof for each transfer)
+✅ Simple for accountant
+
+**Cons:**
+❌ Doesn't show individual trades
+❌ Doesn't show capital gains/losses
+❌ Only tracks USDC (not other tokens)
+
+### 📊 For Complete Tax Analysis
+
+**Use: `generateCompleteTaxReport.js`**
+
+Best if you:
+- Need to report capital gains from crypto trades
+- Want to see all transaction activity
+- Need detailed categorization
+- Trade multiple tokens (not just USDC profits)
+
+**Pros:**
+✅ Complete transaction history
+✅ Identifies swaps and trades
+✅ Shows all income sources
+✅ Multiple report formats
+
+**Cons:**
+❌ Slower (parses 171k+ transactions)
+❌ More complex output
+❌ May need manual review for some transactions
+❌ Higher API costs
+
 ## File Structure
 
 ```
 OreBetWatcherExample/
 ├── fetchTaxYearTransactions.js          # Fetch trading wallet
 ├── fetchProfitWalletTransactions.js     # Fetch profit wallet
-├── generateCompleteTaxReport.js         # Parse & generate reports
+├── trackTradingProfits.js               # ⭐ Track verified USDC profits
+├── generateCompleteTaxReport.js         # Parse & generate complete reports
 │
 ├── tax_year_2024-25_transactions.ndjson              # Raw trading data
 ├── tax_year_2024-25_profit_wallet_transactions.ndjson # Raw profit data
 ├── tax_year_2024-25_all_parsed.ndjson                # Parsed & tagged
+│
+├── tax_year_2024-25_VERIFIED_TRADING_PROFITS.csv     # ⭐ Verified profits only
+├── tax_year_2024-25_profits_summary.json             # ⭐ Profit statistics
 │
 ├── tax_year_2024-25_COMPLETE_TAX_REPORT.csv  # All transactions
 ├── tax_year_2024-25_INCOME_REPORT.csv        # Income only
